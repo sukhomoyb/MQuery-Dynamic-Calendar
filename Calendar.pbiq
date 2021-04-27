@@ -1,0 +1,79 @@
+/* 
+tblCommonCalendar : Common Calendar Table 
+	Parameter require to change 
+	1. FromDate : tblSite[SiteStartDate] to Any Date Like #date(2017,6,15)
+	2. ToDate   : tblSite[SiteEndDate]   to Any Date Like #date(2019,6,15)
+Everything else should be same.
+Author : Sukhomoy Bhattacharya
+*/
+
+let
+/*
+    #"StartDate" = List.Min(tblSite[SiteStartDate]),
+    #"EndDate" = List.Max(tblSite[SiteEndDate]),
+*/
+    #"StartDate" = List.Min(Sales[Sales Date]),
+    #"EndDate" = DateTime.Date(DateTime.LocalNow()), // Current DateTime
+    #"CalendarStDate" = #"StartDate",
+    #"CalendarNdDate" = #"EndDate",
+    #"TblCal" =
+            Table.FromList(
+                List.Dates(
+                    #"CalendarStDate", Number.From(#"CalendarNdDate") - Number.From(#"CalendarStDate") + 1,
+                    #duration(1, 0, 0, 0)
+                    ),
+                Splitter.SplitByNothing(),
+            {"Date"}
+            ),
+    #"Changed Type" = Table.TransformColumnTypes(TblCal,{{"Date", type date}}),
+    #"Sorted Rows" = Table.Sort(#"Changed Type",{{"Date", Order.Descending}}),
+    #"Inserted Year" = Table.AddColumn(#"Sorted Rows", "Year", each Date.Year([Date]), Int64.Type),
+    #"Inserted Month" = Table.AddColumn(#"Inserted Year", "Month", each Date.Month([Date]), Int64.Type),
+    #"Inserted Quarter" = Table.AddColumn(#"Inserted Month", "Quarter", each Date.QuarterOfYear([Date]), Int64.Type),
+    #"Inserted Week of Year" = Table.AddColumn(#"Inserted Quarter", "Week of Year", each Date.WeekOfYear([Date]), Int64.Type),
+    #"Inserted Day" = Table.AddColumn(#"Inserted Week of Year", "Day", each Date.Day([Date]), Int64.Type),
+    #"Inserted Day of Week" = Table.AddColumn(#"Inserted Day", "Day of Week", each Date.DayOfWeek([Date]), Int64.Type),
+    #"Inserted Month Name" = Table.AddColumn(#"Inserted Day of Week", "Month Name", each Date.MonthName([Date]), type text),
+    #"Inserted Day Name" = Table.AddColumn(#"Inserted Month Name", "Day Name", each Date.DayOfWeekName([Date]), type text),
+    #"Inserted Month Short Name" = Table.AddColumn(#"Inserted Day Name", "Month Short Name", each Text.Start([Month Name], 3), type text),
+    #"Inserted Day Short Name" = Table.AddColumn(#"Inserted Month Short Name", "Day Short Name", each Text.Start([Day Name], 3), type text),
+    #"Inserted Month Code" = Table.AddColumn(#"Inserted Day Short Name", "Month Code", each (([Year] * 100) + [Month]),Int64.Type),
+    #"Inserted Month Year" = Table.AddColumn(#"Inserted Month Code", "Month Year", each [Month Short Name] & "'" & Text.End(Text.From([Year]),2), type text),
+    #"Added BOM" = Table.AddColumn(#"Inserted Month Year", "BOM", each Date.StartOfMonth([Date]),type date),
+    #"Added EOM" = Table.AddColumn(#"Added BOM", "EOM", each Date.EndOfMonth([Date]), type date),
+    #"Added Max Date" = Table.AddColumn(#"Added EOM", "Max Date", each List.Max(#"Sorted Rows"[Date]), type date),
+    #"Added Is Current Date" = Table.AddColumn(#"Added Max Date", "Is Current Date", each if [Date] = [Max Date] then 1 else 0,type logical),
+    #"Added Is Previous Date" = Table.AddColumn(#"Added Is Current Date", "Is Previous Date", each if [Date] = Date.AddDays([Max Date],-1) then 1 else 0,type logical),
+    #"Added Is Current Month" = Table.AddColumn(#"Added Is Previous Date", "Is Current Month", each 
+	let 
+	   MxYear = Date.Year([Max Date]),
+	   MxMonth = Date.Month([Max Date]),
+	   MxMonthCode = (MxYear * 100)+ MxMonth,
+	   IsCurrentMonth = if [Month Code] = MxMonthCode then 1 else 0
+	in
+	   IsCurrentMonth, type logical),
+    #"Added Is Prev Month" = Table.AddColumn(#"Added Is Current Month", "Is Prev Month", each 
+	let
+	   PrevMonthDate = Date.AddMonths([Max Date],-1), 
+	   PrevYear = Date.Year(PrevMonthDate),
+	   PrevMonth = Date.Month(PrevMonthDate),
+	   PrevMonthCode = (PrevYear * 100)+ PrevMonth,
+	   IsPrevMonth = if [Month Code] = PrevMonthCode then 1 else 0 
+	in
+	   IsPrevMonth, type logical),
+    #"Added Is Current Year" = Table.AddColumn(#"Added Is Prev Month", "Is Current Year", each 
+	let 
+	   MxYear = Date.Year([Max Date]),
+	   IsCurrentYear = if [Year] = MxYear then 1 else 0
+	in
+	   IsCurrentYear, type logical),
+    #"Added Is Prev Year" = Table.AddColumn(#"Added Is Current Year", "Is Prev Year", each 
+	let
+	   PrevYearDate = Date.AddYears([Max Date],-1), 
+	   PrevYear = Date.Year(PrevYearDate),
+	   IsPrevYear = if [Year] = PrevYear then 1 else 0 
+	in
+	   IsPrevYear, type logical),
+    #"Changed Type1" = Table.TransformColumnTypes(#"Added Is Prev Year",{{"Is Prev Year", type logical}, {"Is Current Year", type logical}, {"Is Prev Month", type logical}, {"Is Current Month", type logical}, {"Is Previous Date", type logical}, {"Is Current Date", type logical}})
+in
+    #"Changed Type1"
